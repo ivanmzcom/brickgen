@@ -33,6 +33,43 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _normalize_color_rgb(color_rgb):
+    """Return a normalized uppercase RGB hex string, or None."""
+    if not color_rgb:
+        return None
+    rgb = str(color_rgb).strip().lstrip("#").upper()
+    if len(rgb) == 6 and all(c in "0123456789ABCDEF" for c in rgb):
+        return rgb
+    return None
+
+
+def _group_parts_for_3mf(stl_files):
+    """Group STL instances by geometry and color for 3MF generation."""
+    unique_parts = {}
+    for stl_path, ldraw_id, color_rgb in stl_files:
+        normalized_color = _normalize_color_rgb(color_rgb)
+        key = (stl_path, ldraw_id, normalized_color)
+        if key not in unique_parts:
+            unique_parts[key] = {
+                "path": stl_path,
+                "ldraw_id": ldraw_id,
+                "quantity": 0,
+                "color_rgb": normalized_color,
+            }
+        unique_parts[key]["quantity"] += 1
+    return [
+        (info["path"], info["ldraw_id"], info["quantity"], info.get("color_rgb"))
+        for info in unique_parts.values()
+    ]
+
+
+def _stl_zip_name(ldraw_id, count, color_rgb=None):
+    color_suffix = _normalize_color_rgb(color_rgb)
+    if color_suffix:
+        return f"stls/{ldraw_id}_{color_suffix}_{count}.stl"
+    return f"stls/{ldraw_id}_{count}.stl"
+
+
 def start_generation(
     job_id: str,
     set_num: str,
@@ -271,15 +308,7 @@ async def process_generation(
             job_log.append("Generating 3MF...")
             set_job_progress(job_id, progress=80, log="\n".join(job_log))
             try:
-                unique_parts = {}
-                for stl_path, ldraw_id, color_rgb in stl_files:
-                    if stl_path not in unique_parts:
-                        unique_parts[stl_path] = {'ldraw_id': ldraw_id, 'quantity': 0, 'color_rgb': color_rgb}
-                    unique_parts[stl_path]['quantity'] += 1
-                parts_for_3mf = [
-                    (path, info['ldraw_id'], info['quantity'], info.get('color_rgb'))
-                    for path, info in unique_parts.items()
-                ]
+                parts_for_3mf = _group_parts_for_3mf(stl_files)
                 threemf_gen = ThreeMFGenerator(part_spacing=settings.part_spacing)
                 if not threemf_gen.generate_3mf(parts_for_3mf, plate_width, plate_depth, plate_height, threemf_path):
                     raise RuntimeError("3MF generation returned False")
@@ -322,11 +351,12 @@ async def process_generation(
                         zipf.write(threemf_path, f"{job_id}.3mf")
                     if generate_stl:
                         part_counts = {}
-                        for stl_path, ldraw_id, _ in stl_files:
-                            if ldraw_id not in part_counts:
-                                part_counts[ldraw_id] = 0
-                            part_counts[ldraw_id] += 1
-                            zip_name = f"stls/{ldraw_id}_{part_counts[ldraw_id]}.stl"
+                        for stl_path, ldraw_id, color_rgb in stl_files:
+                            count_key = (ldraw_id, _normalize_color_rgb(color_rgb))
+                            if count_key not in part_counts:
+                                part_counts[count_key] = 0
+                            part_counts[count_key] += 1
+                            zip_name = _stl_zip_name(ldraw_id, part_counts[count_key], color_rgb)
                             zipf.write(stl_path, zip_name)
                 output_filename = zip_filename
                 if generate_3mf and threemf_path.exists():

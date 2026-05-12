@@ -161,6 +161,48 @@ class TestThreeMFGeneratorCreate3mf:
         assert len(vertices) >= 1
         assert len(build_items) >= 1
 
+    def test_3mf_model_keeps_distinct_object_colors(self, tmp_path):
+        gen = ThreeMFGenerator()
+        mesh = {
+            "vertices": [[0, 0, 0], [1, 0, 0], [0.5, 1, 0]],
+            "triangles": [[0, 1, 2]],
+        }
+        placements = [
+            {
+                "mesh_data": mesh,
+                "translation": [0.0, 0.0, 0.0],
+                "ldraw_id": "3005",
+                "instance_num": 1,
+                "color_rgb": "CC0000",
+            },
+            {
+                "mesh_data": mesh,
+                "translation": [2.0, 0.0, 0.0],
+                "ldraw_id": "3005",
+                "instance_num": 1,
+                "color_rgb": "0055BF",
+            },
+        ]
+        out = tmp_path / "out.3mf"
+        gen._create_3mf_file(placements, out)
+        with zipfile.ZipFile(out, "r") as zf:
+            raw = zf.read("3D/3dmodel.model").decode("utf-8")
+
+        root = ET.fromstring(raw)
+        model_ns = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+        ns = {"m": model_ns, "mat": NS_M}
+        colors = root.findall(".//mat:color", ns)
+        triangles = root.findall(".//m:triangle", ns)
+
+        assert [c.attrib["color"] for c in colors] == ["#CC0000", "#0055BF"]
+        assert [
+            {k: t.attrib[k] for k in ("pid", "p1", "p2", "p3")}
+            for t in triangles
+        ] == [
+            {"pid": "1", "p1": "0", "p2": "0", "p3": "0"},
+            {"pid": "1", "p1": "1", "p2": "1", "p3": "1"},
+        ]
+
 
 class TestThreeMFGeneratorGenerate3mf:
     def test_generate_3mf_integration(self, tmp_path):

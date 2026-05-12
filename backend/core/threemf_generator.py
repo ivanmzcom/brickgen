@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # 3MF Materials Extension namespace for color
 NS_M = "http://schemas.microsoft.com/3dmanufacturing/material/2015/02"
+ET.register_namespace("m", NS_M)
 
 
 class ThreeMFGenerator:
@@ -323,7 +324,6 @@ class ThreeMFGenerator:
         """
         model_ns = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
         root = ET.Element("model", unit="millimeter", xmlns=model_ns)
-        root.set("xmlns:m", NS_M)
         resources = ET.SubElement(root, "resources")
         build = ET.SubElement(root, "build")
         
@@ -358,11 +358,7 @@ class ThreeMFGenerator:
                 rgb = default_hex
             color_index = color_to_index.get(rgb, 0)
             
-            obj_attrib = {"id": str(object_id), "type": "model"}
-            if unique_colors:
-                obj_attrib["pid"] = "1"
-                obj_attrib["pindex"] = str(color_index)
-            obj = ET.SubElement(resources, "object", **obj_attrib)
+            obj = ET.SubElement(resources, "object", id=str(object_id), type="model")
             mesh = ET.SubElement(obj, "mesh")
             vertices_elem = ET.SubElement(mesh, "vertices")
             triangles_elem = ET.SubElement(mesh, "triangles")
@@ -370,8 +366,20 @@ class ThreeMFGenerator:
                 ET.SubElement(vertices_elem, "vertex",
                     x=f"{vertex[0]:.6f}", y=f"{vertex[1]:.6f}", z=f"{vertex[2]:.6f}")
             for triangle in mesh_data['triangles']:
-                ET.SubElement(triangles_elem, "triangle",
-                    v1=str(triangle[0]), v2=str(triangle[1]), v3=str(triangle[2]))
+                tri_attrib = {
+                    "v1": str(triangle[0]),
+                    "v2": str(triangle[1]),
+                    "v3": str(triangle[2]),
+                }
+                if unique_colors:
+                    color_ref = str(color_index)
+                    tri_attrib.update({
+                        "pid": "1",
+                        "p1": color_ref,
+                        "p2": color_ref,
+                        "p3": color_ref,
+                    })
+                ET.SubElement(triangles_elem, "triangle", **tri_attrib)
             
             # 3MF transform: 3x4 matrix column-major (m00 m10 m20 m01 m11 m21 m02 m12 m22 m03 m13 m23)
             tx, ty, tz = translation[0], translation[1], translation[2]

@@ -1,6 +1,7 @@
 """Tests for underlying functions used by API routes (no server/TestClient)."""
 import pytest
 
+from backend.api.routes.generate import _group_parts_for_3mf, _stl_zip_name
 from backend.api.routes.parts import _rotation_suffix, _parse_preview_filename
 
 
@@ -67,3 +68,24 @@ class TestParsePreviewFilename:
         assert _parse_preview_filename("") == {}
         assert _parse_preview_filename("nospace") == {}
         assert _parse_preview_filename("3005") == {}
+
+
+class TestGenerateOutputHelpers:
+    def test_group_parts_for_3mf_keeps_same_stl_in_different_colors(self, tmp_path):
+        stl = tmp_path / "3005.stl"
+        rows = [
+            (stl, "3005", "CC0000"),
+            (stl, "3005", "0055BF"),
+            (stl, "3005", "cc0000"),
+        ]
+
+        grouped = _group_parts_for_3mf(rows)
+
+        assert grouped == [
+            (stl, "3005", 2, "CC0000"),
+            (stl, "3005", 1, "0055BF"),
+        ]
+
+    def test_stl_zip_name_includes_color_when_available(self):
+        assert _stl_zip_name("3005", 1, "cc0000") == "stls/3005_CC0000_1.stl"
+        assert _stl_zip_name("3005", 1, None) == "stls/3005_1.stl"
