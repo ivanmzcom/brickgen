@@ -413,34 +413,7 @@ apiFetch(`/api/jobs/${jobId}`)
       }
       
       const blob = await r.blob()
-      
-      // Use File System Access API if available (prompts user for save location)
-      if (window.showSaveFilePicker) {
-        try {
-          const fileExtension = filename.split('.').pop()
-          const handle = await window.showSaveFilePicker({
-            suggestedName: filename,
-            types: [{
-              description: fileExtension === 'zip' ? 'ZIP Archive' : '3MF File',
-              accept: fileExtension === 'zip' 
-                ? { 'application/zip': ['.zip'] }
-                : { 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml': ['.3mf'] }
-            }]
-          })
-          const writable = await handle.createWritable()
-          await writable.write(blob)
-          await writable.close()
-          return
-        } catch (err) {
-          // User cancelled the save dialog or browser blocked it
-          if (err.name !== 'AbortError') {
-            console.error('Save picker failed:', err)
-          }
-          return
-        }
-      }
-      
-      // Fallback: programmatic download (browser may or may not prompt based on settings)
+
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
