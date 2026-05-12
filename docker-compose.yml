@@ -2,9 +2,8 @@ version: '3.8'
 
 services:
   brickgen:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    platform: linux/amd64
+    image: ghcr.io/ivanmzcom/brickgen:latest
     container_name: brickgen
     ports:
       - "8000:8000"
